@@ -191,7 +191,7 @@ jobs:
           GITHUB_ACTIONS: true
         run: |
           # 不打印设备密钥；避免把首页占位示例或不完整地址当作有效配置。
-          uv run python - <<'PY'
+          if ! uv run python - <<'PY'
           import os
           from urllib.parse import urlsplit
           value = os.environ.get("BARK_URL", "").strip()
@@ -205,6 +205,16 @@ jobs:
                       or key.strip("<>").lower() in {"your_key", "yourkey", "your_device_key", "真实设备key", "设备key"}):
                       raise SystemExit("BARK_URL 格式无效：请填写 https://服务器地址/真实设备Key，不要填 curl 命令、YOUR_KEY、标题或正文。")
           PY
+          then
+            if [ "${{ inputs.test_notification }}" = "true" ]; then
+              echo "::error::BARK_URL 格式无效，请编辑仓库 Secret；设备 Key 不会显示在日志中。"
+              echo "Bark 测试未执行：BARK_URL 格式无效，请编辑已有 Secret。" >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+            fi
+            echo "::warning::BARK_URL 格式无效，本次关闭推送并继续抓取；请编辑已有 Secret。"
+            echo "Bark 地址格式无效，本次已跳过推送并继续抓取。" >> "$GITHUB_STEP_SUMMARY"
+            export BARK_URL=""
+          fi
           uv run python -m trendradar --doctor
           if [ "${{ inputs.test_notification }}" = "true" ]; then
             if [ -z "$BARK_URL" ]; then
