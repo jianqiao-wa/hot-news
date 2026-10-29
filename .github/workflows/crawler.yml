@@ -40,6 +40,11 @@ on:
         type: boolean
         required: false
         default: false
+      preview_digest:
+        description: "手动发送完整候选汇总（本次忽略时段和晚间去重）"
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: crawler-${{ github.ref_name }}
@@ -151,6 +156,15 @@ jobs:
           restore-keys: |
             trendradar-state-v1-${{ github.ref_name }}-${{ steps.state_key.outputs.day }}-
 
+      - name: Restore daily RSS state
+        if: success()
+        uses: actions/cache/restore@v6
+        with:
+          path: output/runtime/rss
+          key: trendradar-rss-v1-${{ github.ref_name }}-${{ steps.state_key.outputs.day }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            trendradar-rss-v1-${{ github.ref_name }}-${{ steps.state_key.outputs.day }}-
+
       - name: Run crawler
         if: success()
         id: crawler
@@ -215,6 +229,30 @@ jobs:
             echo "Bark 地址格式无效，本次已跳过推送并继续抓取。" >> "$GITHUB_STEP_SUMMARY"
             export BARK_URL=""
           fi
+          # 在抓取前确定报告模式，使 RSS 与热榜使用同一时段；正常调度和去重保持开启。
+          if [ "${{ inputs.test_notification }}" != "true" ]; then
+            uv run python - <<'PY'
+          from pathlib import Path
+          import yaml
+          data = yaml.safe_load(Path("config/config.yaml").read_text(encoding="utf-8"))
+          if "${{ inputs.preview_digest }}" == "true":
+              data["schedule"]["enabled"] = False
+              data["report"]["mode"] = "daily"
+          else:
+              from trendradar.core import load_config
+              from trendradar.context import AppContext
+              ctx = AppContext(load_config())
+              try:
+                  data["report"]["mode"] = ctx.create_scheduler().resolve().report_mode
+              finally:
+                  ctx.cleanup()
+          Path("config/runtime_report.yaml").write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+          PY
+            export CONFIG_PATH="config/runtime_report.yaml"
+            if [ "${{ inputs.preview_digest }}" = "true" ]; then
+              echo "本次为手动完整候选预览；忽略推送时段和晚间去重，正常定时配置不变。" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
           uv run python -m trendradar --doctor
           if [ "${{ inputs.test_notification }}" = "true" ]; then
             if [ -z "$BARK_URL" ]; then
@@ -265,6 +303,13 @@ jobs:
         with:
           path: output/runtime/news
           key: trendradar-state-v1-${{ github.ref_name }}-${{ steps.state_key.outputs.day }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Save daily RSS state
+        if: ${{ always() && steps.crawler.outcome != 'skipped' && steps.state_key.outputs.day != '' }}
+        uses: actions/cache/save@v6
+        with:
+          path: output/runtime/rss
+          key: trendradar-rss-v1-${{ github.ref_name }}-${{ steps.state_key.outputs.day }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       # 首次验收和排查抓取异常时可下载；Check In 会删除工作流历史及其附件。
       - name: Upload crawler report

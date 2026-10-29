@@ -96,14 +96,14 @@ platforms:
 # max_age_days: 可选，覆盖全局 freshness_filter.max_age_days
 # ===============================================================
 rss:
-  enabled: false                      # 第一版只监控六个平台热榜；保留 RSS 配置供以后开启
+  enabled: true                       # 补充研究生、高校与学术垂直候选，仍使用关键词筛选
 
   # 文章新鲜度过滤（过滤超龄旧文章，避免重复推送）
   # 仅在推送阶段过滤，所有文章仍会存入数据库
   freshness_filter:
     enabled: true                     # 是否启用新鲜度过滤（true=启用, false=关闭）
 
-    max_age_days: 1                   # 最大文章年龄（天）
+    max_age_days: 3                   # 最大文章年龄（天），兼顾低频更新的高校与学术新闻
                                       # - 正整数：只推送 N 天内的文章
                                       # - 0：禁用过滤，推送所有文章
 
@@ -112,26 +112,14 @@ rss:
   # - 正整数：覆盖全局设置，只推送此天数内的文章
   # - 0：禁用此频道的新鲜度过滤，推送所有文章
   feeds:
-    - id: "hacker-news"
-      name: "Hacker News"
-      url: "https://hnrss.org/frontpage"
+    # 官方订阅目录：https://www.sciencenet.cn/RSS.aspx
+    - id: "sciencenet-higher-education"
+      name: "科学网·人才高教"
+      url: "https://www.sciencenet.cn/xml/news-0.aspx?di=9"
 
-    - id: "ruanyifeng"
-      name: "阮一峰的网络日志"
-      url: "http://www.ruanyifeng.com/blog/atom.xml"
-      enabled: false                  # 禁用
-      # max_age_days: 3               # 示例：推送 3 天内的文章（更新较慢的博客）
-     
-    - id: "yahoo-finance"
-      name: "雅虎财经"
-      url: "https://finance.yahoo.com/news/rssindex"
-
-    # 自定义源示例
-    # - id: "custom-feed"
-    #   name: "自定义源"
-    #   url: "https://example.com/feed.xml"
-    #   enabled: false
-    #   max_age_days: 0               # 示例：禁用过滤，推送所有文章
+    - id: "sciencenet-important"
+      name: "科学网·首页要闻"
+      url: "https://www.sciencenet.cn/xml/news-0.aspx?di=1"
 
 
 # ===============================================================
@@ -153,7 +141,7 @@ report:
 
   rank_threshold: 5                   # 排名高亮阈值（影响展示强调，不改变抓取范围）
 
-  max_news_per_keyword: 5             # 每组最多展示 5 条，frequency_words.txt 可用 @N 进一步收紧
+  max_news_per_keyword: 0             # 候选池模式：不裁剪条数，由读者自行筛选
 
 
 # ===============================================================
@@ -223,7 +211,7 @@ display:
     new_items: false                  # 新增热点区域：含热榜新增 + RSS 新增（true=显示, false=隐藏）
                                       # 注：热点词汇统计中的新增标记🆕不受此配置影响
 
-    rss: false                        # 第一版关闭 RSS 展示
+    rss: true                         # 展示高教科研订阅中匹配的候选新闻
     standalone: false                 # 独立展示区：完整热榜/RSS，不受关键词过滤（true=显示, false=隐藏）
     ai_analysis: false                # 第一版关闭 AI 分析展示
 
