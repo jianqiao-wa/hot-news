@@ -12,7 +12,7 @@
 - 08:00 ≤ 时间 < 20:00：只推送本日新出现且匹配关键词的标题，无匹配新增时不推送。
 - 20:00 ≤ 时间 < 22:00：首次成功推送一次当日汇总，包含当日截至本次运行的已抓取数据；之后继续采集，不再补推。
 - 22:00 最后一趟只采集；时段外手动运行同样会抓取，但不生成报告、不推送。
-- 按官方排名、出现频次和热度权重排序；每组限量，总展示上限 28 条。企业微信有消息长度限制，一次推送可能拆成数条消息。
+- 按官方排名、出现频次和热度权重排序；每组限量，总展示上限 28 条。通过 Bark 推送到 iPhone，长报告按官方逻辑拆分为数条通知，分组为 `TrendRadar`。
 
 ## 3. 发布到你的 GitHub
 
@@ -20,30 +20,30 @@
 
 如果用 Git 上传，先把官方远端保留为 `upstream`，将自己的仓库配置为 `origin`，仅提交本次配置和说明；不要上传 `.venv`、运行数据或任何密钥。确保工作流位于仓库默认分支，并在 Actions 页面允许工作流运行。
 
-## 4. 添加企业微信机器人
+## 4. 配置 Bark 推送
 
-**普通微信里不能创建本项目需要的企业微信 Webhook。** 先安装并登录企业微信，使用一个企业内部群接收通知（不能使用含外部联系人的群）。
+1. 在 iPhone 打开 Bark，点“去开启”，允许通知。若系统设置中仍未开启，进入 **设置 → 通知 → Bark → 允许通知**。
 
-企业微信 5.0 电脑端：找到该群 → **管理聊天信息 → 消息推送 → 自定义消息推送** → 名称填“硕博雷达” → 保存 → 复制 Webhook。部分版本入口叫 **群设置 → 添加群机器人 → 新建机器人**。没有入口时，检查是否内部群，以及群主/企业管理员是否允许添加。
+2. 回到 Bark“服务器”首页，点“发送测试”，确认手机收到。使用示例中的 `YOUR_KEY` 必须已变成真实设备 Key；设置页的 `Device Token` 不是要填入 GitHub 的 Key。
 
-参考 [腾讯官方图文步骤](https://cloud.tencent.cn/document/product/1759/128391)。创建或登录企业微信、加入/创建内部群需要你本人完成。
+3. 复制推送地址，仅保留服务器地址与第一段真实设备 Key：`https://api.day.app/<真实设备Key>`。不要包含 `curl -X GET`、`/title/body` 或查询参数。若仍显示 `YOUR_KEY` 或 Token 未知，先确认通知权限、网络与 Bark 内置自测正常，再添加 Secret。
 
-复制 Webhook 后打开 [本仓库 Secrets 页面](https://github.com/jianqiao-wa/hot-news/settings/secrets/actions)：
+4. 打开 [直接新增 Secret](https://github.com/jianqiao-wa/hot-news/settings/secrets/actions/new)，填写：
 
-**Settings → Secrets and variables → Actions → New repository secret**
-
-- Name：`WEWORK_WEBHOOK_URL`
-- Secret（值）：粘贴完整的企业微信群机器人 Webhook，然后点 **Add secret**。
+- Name：`BARK_URL`
+- Secret（值）：粘贴上一步的真实推送地址，然后点 **Add secret**。
 
 只需添加 **Repository secret**，不需要 Environment secret，也不要填到 Variables。保存后页面只显示名字，无法重新显示原值，这是正常的。
 
-工作流原生从该 Secret 读取，配置文件中保持空字符串。无需其他渠道、S3 或 AI Secret；不要把真实 Webhook 写进代码、示例、日志或聊天。
+工作流原生从 `BARK_URL` 读取，配置文件中保持空字符串。企业微信已停用，旧的 `WEWORK_WEBHOOK_URL` Secret 不会再被使用。不要把真实 Bark 地址或设备 Key 写进代码、日志或聊天。
+
+Bark“设置 → 默认保存”可保留通知历史；本项目使用官方发送器，不读取 URL 中的 `group`、`isArchive` 等额外参数。[Bark 官方使用说明](https://github.com/Finb/Bark/blob/master/README.zh.md)。
 
 ## 5. 首次手动运行
 
-添加 Secret 后，进入 [Actions → Get Hot News](https://github.com/jianqiao-wa/hot-news/actions/workflows/crawler.yml) → **Run workflow** → 分支 `main` → 勾选“仅发送企业微信测试通知” → 执行。这个测试不受推送时段、新增数量和晚间去重影响，只发送一条官方连通性测试消息；仍需在群里确认收到。
+添加 Secret 后，进入 [Actions → Get Hot News](https://github.com/jianqiao-wa/hot-news/actions/workflows/crawler.yml) → **Run workflow** → 分支 `main` → 勾选“仅发送 Bark 测试通知” → 执行。这个测试不受推送时段、新增数量和晚间去重影响，只发送一条官方连通性测试消息；仍需在 iPhone 确认收到。
 
-日常抓取测试：取消勾选该选项，在 08:00–22:00 内运行。首次运行会把当天首次见到的匹配标题视作新增；重复运行可能因没有新增或晚间已推送而保持安静。尚未配置 Secret 时仍会抓取，但摘要会明确标为“企业微信未配置”；绿勾不代表群消息已经送达。
+日常抓取测试：取消勾选该选项，在 08:00–22:00 内运行。首次运行会把当天首次见到的匹配标题视作新增；重复运行可能因没有新增或晚间已推送而保持安静。尚未配置 Secret 时仍会抓取，但摘要会明确标为“Bark 未配置”；绿勾不代表手机已经收到通知。
 
 本地检查（在项目目录）：
 

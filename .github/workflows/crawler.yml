@@ -36,7 +36,7 @@ on:
   workflow_dispatch:
     inputs:
       test_notification:
-        description: "仅发送企业微信测试通知（需先添加 WEWORK_WEBHOOK_URL）"
+        description: "仅发送 Bark 测试通知（需先添加 BARK_URL）"
         type: boolean
         required: false
         default: false
@@ -159,8 +159,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           DINGTALK_WEBHOOK_URL: ${{ secrets.DINGTALK_WEBHOOK_URL }}
-          WEWORK_WEBHOOK_URL: ${{ secrets.WEWORK_WEBHOOK_URL }}
-          WEWORK_MSG_TYPE: ${{ secrets.WEWORK_MSG_TYPE }}
+          WEWORK_WEBHOOK_URL: ""  # 已切换 Bark，避免旧企业微信 Secret 造成双重推送
+          WEWORK_MSG_TYPE: "markdown"
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
@@ -190,19 +190,34 @@ jobs:
           S3_REGION: ${{ secrets.S3_REGION }}
           GITHUB_ACTIONS: true
         run: |
+          # 不打印设备密钥；避免把首页占位示例或不完整地址当作有效配置。
+          uv run python - <<'PY'
+          import os
+          from urllib.parse import urlsplit
+          value = os.environ.get("BARK_URL", "").strip()
+          if value:
+              urls = value.split(";")
+              for url in urls:
+                  parsed = urlsplit(url.strip())
+                  key = parsed.path.strip("/")
+                  if (parsed.scheme != "https" or not parsed.netloc or parsed.username
+                      or parsed.password or not key or "/" in key or parsed.query or parsed.fragment
+                      or key.strip("<>").lower() in {"your_key", "yourkey", "your_device_key", "真实设备key", "设备key"}):
+                      raise SystemExit("BARK_URL 格式无效：请填写 https://服务器地址/真实设备Key，不要填 curl 命令、YOUR_KEY、标题或正文。")
+          PY
           uv run python -m trendradar --doctor
           if [ "${{ inputs.test_notification }}" = "true" ]; then
-            if [ -z "$WEWORK_WEBHOOK_URL" ]; then
-              echo "::error::尚未配置 WEWORK_WEBHOOK_URL；请先在企业微信创建机器人，再添加仓库 Secret。"
-              echo "企业微信测试未执行：缺少 WEWORK_WEBHOOK_URL。" >> "$GITHUB_STEP_SUMMARY"
+            if [ -z "$BARK_URL" ]; then
+              echo "::error::尚未配置 BARK_URL；请在 Bark 开启通知并取得真实推送地址，再添加仓库 Secret。"
+              echo "Bark 测试未执行：缺少 BARK_URL。" >> "$GITHUB_STEP_SUMMARY"
               exit 1
             fi
             uv run python -m trendradar --test-notification
-            echo "企业微信测试接口已返回成功，请在企业微信群确认收到测试消息。" >> "$GITHUB_STEP_SUMMARY"
+            echo "通知测试接口已返回成功；请确认日志中 Bark 测试成功，并在 iPhone 确认收到测试消息。" >> "$GITHUB_STEP_SUMMARY"
           else
-            if [ -z "$WEWORK_WEBHOOK_URL" ]; then
-              echo "::warning::尚未配置 WEWORK_WEBHOOK_URL，本次只验收抓取和筛选，未验收企业微信送达。"
-              echo "企业微信未配置：本次只运行抓取和筛选。" >> "$GITHUB_STEP_SUMMARY"
+            if [ -z "$BARK_URL" ]; then
+              echo "::warning::尚未配置 BARK_URL，本次只验收抓取和筛选，未验收 Bark 送达。"
+              echo "Bark 未配置：本次只运行抓取和筛选。" >> "$GITHUB_STEP_SUMMARY"
             fi
             export CRAWL_STARTED_AT="$(TZ=Asia/Shanghai date '+%Y-%m-%d %H:%M:%S')"
             uv run python -m trendradar

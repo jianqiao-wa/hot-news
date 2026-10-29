@@ -257,7 +257,7 @@ notification:
       webhook_url: ""                 # 钉钉机器人 webhook URL
 
     wework:
-      webhook_url: ""                 # 企业微信机器人 webhook URL
+      webhook_url: ""                 # 本部署使用 Bark，企业微信保持关闭
       msg_type: "markdown"            # 消息类型：markdown(群机器人) | text(个人微信应用)
 
     telegram:
@@ -277,7 +277,7 @@ notification:
       token: ""                       # ntfy 访问令牌（可选，用于私有主题）
 
     bark:
-      url: ""                         # Bark 推送 URL（格式：https://api.day.app/your_device_key）
+      url: ""                         # 从 GitHub Secret BARK_URL 读取；不要在此填写真实设备密钥
 
     slack:
       webhook_url: ""                 # Slack Incoming Webhook URL
