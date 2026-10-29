@@ -1,0 +1,81 @@
+# 微信公众号选题热点雷达
+
+基于官方 TrendRadar v6.11.0（提交 `68c8916`），以关键词筛选热榜，为公众号提供选题线索。源码保持官方版本。
+
+## 1. 当前监控
+
+微博、知乎、百度、抖音、B站、今日头条。优先级依次为：学术诚信与撤稿、导师课题组、研究生、高校事件、科研成果、招聘就业政策与争议、AI科技、社会重大事件。RSS 和 AI 筛选、分析、翻译均关闭。
+
+## 2. 抓取与推送时间
+
+- 均为北京时间，每天 08:00–22:00 每半小时计划抓取一次，共 29 次；Actions 可能延迟或漏跑，不能保证准点。
+- 08:00 ≤ 时间 < 20:00：只推送本日新出现且匹配关键词的标题，无匹配新增时不推送。
+- 20:00 ≤ 时间 < 22:00：首次成功推送一次当日汇总，包含当日截至本次运行的已抓取数据；之后继续采集，不再补推。
+- 22:00 最后一趟只采集；时段外手动运行同样会抓取，但不生成报告、不推送。
+- 按官方排名、出现频次和热度权重排序；每组限量，总展示上限 28 条。企业微信有消息长度限制，一次推送可能拆成数条消息。
+
+## 3. 发布到你的 GitHub
+
+部署仓库为 [jianqiao-wa/hot-news](https://github.com/jianqiao-wa/hot-news)，默认分支为 `main`。程序和配置需推送到这个仓库的默认分支后，Actions 才能运行。不要把代码推向 `sansan0/TrendRadar`。
+
+如果用 Git 上传，先把官方远端保留为 `upstream`，将自己的仓库配置为 `origin`，仅提交本次配置和说明；不要上传 `.venv`、运行数据或任何密钥。确保工作流位于仓库默认分支，并在 Actions 页面允许工作流运行。
+
+## 4. 添加企业微信机器人
+
+**普通微信里不能创建本项目需要的企业微信 Webhook。** 先安装并登录企业微信，使用一个企业内部群接收通知（不能使用含外部联系人的群）。
+
+企业微信 5.0 电脑端：找到该群 → **管理聊天信息 → 消息推送 → 自定义消息推送** → 名称填“硕博雷达” → 保存 → 复制 Webhook。部分版本入口叫 **群设置 → 添加群机器人 → 新建机器人**。没有入口时，检查是否内部群，以及群主/企业管理员是否允许添加。
+
+参考 [腾讯官方图文步骤](https://cloud.tencent.cn/document/product/1759/128391)。创建或登录企业微信、加入/创建内部群需要你本人完成。
+
+复制 Webhook 后打开 [本仓库 Secrets 页面](https://github.com/jianqiao-wa/hot-news/settings/secrets/actions)：
+
+**Settings → Secrets and variables → Actions → New repository secret**
+
+- Name：`WEWORK_WEBHOOK_URL`
+- Secret（值）：粘贴完整的企业微信群机器人 Webhook，然后点 **Add secret**。
+
+只需添加 **Repository secret**，不需要 Environment secret，也不要填到 Variables。保存后页面只显示名字，无法重新显示原值，这是正常的。
+
+工作流原生从该 Secret 读取，配置文件中保持空字符串。无需其他渠道、S3 或 AI Secret；不要把真实 Webhook 写进代码、示例、日志或聊天。
+
+## 5. 首次手动运行
+
+添加 Secret 后，进入 [Actions → Get Hot News](https://github.com/jianqiao-wa/hot-news/actions/workflows/crawler.yml) → **Run workflow** → 分支 `main` → 勾选“仅发送企业微信测试通知” → 执行。这个测试不受推送时段、新增数量和晚间去重影响，只发送一条官方连通性测试消息；仍需在群里确认收到。
+
+日常抓取测试：取消勾选该选项，在 08:00–22:00 内运行。首次运行会把当天首次见到的匹配标题视作新增；重复运行可能因没有新增或晚间已推送而保持安静。尚未配置 Secret 时仍会抓取，但摘要会明确标为“企业微信未配置”；绿勾不代表群消息已经送达。
+
+本地检查（在项目目录）：
+
+```powershell
+uv sync --frozen --no-dev
+uv run python -m trendradar --doctor
+uv run python -m trendradar --show-schedule
+uv run python -m trendradar
+```
+
+本机若 `uv` 尚未进入 PATH，可将 `uv` 换成 `python -m uv`。GitHub Secrets 不会自动注入本机，因此本地没有通知渠道是正常现象。
+
+## 6. 查看错误和报告
+
+**Actions → Get Hot News → 某次运行 → crawl → 对应步骤**。重点看 `Install dependencies`、`Restore daily crawler state`、`Run crawler` 和 `Save daily crawler state`。运行摘要会列出本次实际抓取条数和各平台成功/失败情况，全源失败会报错。在运行详情的 Artifacts 下载 `trendradar-report-…` 查看 HTML 和体检报告（保留 7 天，静默时段可能只有体检报告）。本地报告位于 `output/html/`，体检报告为 `output/meta/doctor_report.json`。
+
+当日 SQLite 存在 `output/runtime/news/`，Actions 每次恢复、保存同日缓存，维持增量去重及晚间 `once.push`。**不要清理当天缓存**；缓存丢失、保存失败或被淘汰会造成当日历史不完整，并可能重推。缓存只存新闻及调度记录，不存密钥。
+
+## 7. 每周 Check In
+
+每 7 天内至少一次：**Actions → Check In → Run workflow**。它删除工作流运行历史以重置 7 天倒计时，不会累加时长；重要日志和附件应先下载。若已经过期，先签到，再进入 **Get Hot News → Enable workflow** 恢复，并手动运行一次。官方签到逻辑保持不变。
+
+## 8. 调整关键词
+
+编辑 `config/frequency_words.txt`，保留空行分组和组别名。普通词为 OR，`+` 必须词全部满足，`/正则/` 忽略大小写，`@N` 限制该组展示数量。全局噪音规则放在 `[GLOBAL_FILTER]`，主题放在 `[WORD_GROUPS]`。当前源码把所有 `!词` 全局应用，避免用 `!明星` 等宽泛词误杀重大事件。优先级由组顺序控制。
+
+筛选只看标题；不能强制多平台同时上榜、验证真伪、还原完整故事线或合并同一事件的不同标题。`rank_threshold` 只影响强调和权重，不是“只推前 N 名”的过滤开关。
+
+## 9. 以后开启 AI
+
+先决定需要筛选、分析或翻译中的哪项，再将 `AI_API_KEY` 加入 GitHub Secrets，配置 `ai.model` 等官方字段。按需调整 `filter.method`、`ai_analysis.enabled`、`ai_translation.enabled`，并同步修改工作流里固定为 `false` 的 `AI_*_ENABLED` 和 timeline 的 `filter_method` / `analyze`。分析展示还需开启 `display.regions.ai_analysis`。未明确开启前不调用 AI；启用后可能产生所选服务商的费用。
+
+## 10. 升级 TrendRadar
+
+本仓库按模板方式导入官方源码，并保留你原来的初始提交，与官方仓库没有共同的提交历史。升级前先提交备份这四个配置及本指南，再获取官方新版，按文件比较迁入源码和配置变化；不要直接 `git pull upstream master` 或覆盖自定义配置。保留 Secret 引用、当日状态缓存和自定义时段。升级后重新运行 `--doctor`，再手动执行一次 Actions 验收；以新版本注释、迁移说明和代码为准。

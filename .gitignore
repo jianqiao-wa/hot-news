@@ -1,0 +1,14 @@
+# Local credentials must never be committed.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local Python environment and generated output (tracked upstream samples stay tracked).
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+output/
+cloudflare_dist/
